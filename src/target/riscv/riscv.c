@@ -1430,6 +1430,29 @@ COMMAND_HANDLER(riscv_dmi_write)
 	}
 }
 
+COMMAND_HANDLER(riscv_test_sba_config_reg)
+{
+	if (CMD_ARGC != 1) {
+		LOG_ERROR("Command takes exactly 1 argument");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+
+	struct target *target = get_current_target(CMD_CTX);
+	RISCV_INFO(r);
+
+	uint32_t legal_address;
+	uint32_t illegal_address;
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], legal_address);
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], illegal_address);
+
+	if (r->test_sba_config_reg) {
+		return r->test_sba_config_reg(target, legal_address, illegal_address);
+	} else {
+		LOG_ERROR("test_sba_config_reg is not implemented for this target.");
+		return ERROR_FAIL;
+	}
+}
+
 static const struct command_registration riscv_exec_command_handlers[] = {
 	{
 		.name = "set_command_timeout_sec",
@@ -1496,6 +1519,15 @@ static const struct command_registration riscv_exec_command_handlers[] = {
 		.mode = COMMAND_ANY,
 		.usage = "riscv dmi_write address value",
 		.help = "Perform a 32-bit DMI write of value at address."
+	},
+	{
+		.name = "test_sba_config_reg",
+		.handler = riscv_test_sba_config_reg,
+		.mode = COMMAND_ANY,
+		.usage = "riscv test_sba_config_reg legal_address illegal_address",
+		.help = "Perform a series of tests on the SBCS register."
+			"Inputs are a legal address for read/write tests,"
+			"and an illegal address to for error flag/handling cases."
 	},
 	COMMAND_REGISTRATION_DONE
 };
