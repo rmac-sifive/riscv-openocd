@@ -283,7 +283,7 @@ static void decode_dmi(char *text, unsigned address, unsigned data)
 		{ DMI_DMCONTROL, DMI_DMCONTROL_RESUMEREQ, "resumereq" },
 		{ DMI_DMCONTROL, DMI_DMCONTROL_HARTRESET, "hartreset" },
 		{ DMI_DMCONTROL, DMI_DMCONTROL_HASEL, "hasel" },
-		{ DMI_DMCONTROL, ((1L<<10)-1) << DMI_DMCONTROL_HARTSELLO_OFFSET, "hartsel" },
+		{ DMI_DMCONTROL, DMI_DMCONTROL_HARTSELLO, "hartsello" },
 		{ DMI_DMCONTROL, DMI_DMCONTROL_NDMRESET, "ndmreset" },
 		{ DMI_DMCONTROL, DMI_DMCONTROL_DMACTIVE, "dmactive" },
 
@@ -2943,7 +2943,7 @@ static int riscv013_test_sba_config_reg(struct target *target,
 			read_sbcs_nonbusy(target, &sbcs);
 			curr_addr = sb_read_address(target);
 			if ((curr_addr - prev_addr != (uint32_t)(1 << sbaccess)) && (i != 0)) {
-				LOG_ERROR("System Bus Access Test 2: Error with address auto-increment, sbaccess = %x", sbaccess);
+				LOG_ERROR("System Bus Access Test 2: Error with address auto-increment, sbaccess = %x.", sbaccess);
 				test_passed = false;
 			}
 			dmi_write(target, DMI_SBDATA0, i);
@@ -2970,7 +2970,7 @@ static int riscv013_test_sba_config_reg(struct target *target,
 			read_sbcs_nonbusy(target, &sbcs);
 			if (i != val) {
 				LOG_ERROR("System Bus Access Test 2: Error reading auto-incremented address,"
-						"expected val = %x, read val = %x", i, val);
+						"expected val = %x, read val = %x.", i, val);
 				test_passed = false;
 			}
 		}
@@ -2983,11 +2983,15 @@ static int riscv013_test_sba_config_reg(struct target *target,
 
 	dmi_read(target, &rd_val, DMI_SBCS);
 	if (get_field(rd_val, DMI_SBCS_SBERROR) == 2) {
-		LOG_INFO("System Bus Access Test 3: Illegal address read test PASSED.");
-		sbcs = set_field(sbcs_orig, DMI_SBCS_SBERROR, 1);
+		sbcs = set_field(sbcs_orig, DMI_SBCS_SBERROR, 2);
 		dmi_write(target, DMI_SBCS, sbcs);
+		dmi_read(target, &rd_val, DMI_SBCS);
+		if (get_field(rd_val, DMI_SBCS_SBERROR) == 0)
+			LOG_INFO("System Bus Access Test 3: Illegal address read test PASSED.");
+		else
+			LOG_ERROR("System Bus Access Test 3: Illegal address read test FAILED, unable to clear to 0.");
 	} else {
-		LOG_ERROR("System Bus Access Test 3: Illegal address read test FAILED.");
+		LOG_ERROR("System Bus Access Test 3: Illegal address read test FAILED, unable to set error code.");
 	}
 
 	/* Test 4: Write to illegal address */
@@ -2995,11 +2999,15 @@ static int riscv013_test_sba_config_reg(struct target *target,
 
 	dmi_read(target, &rd_val, DMI_SBCS);
 	if (get_field(rd_val, DMI_SBCS_SBERROR) == 2) {
-		LOG_INFO("System Bus Access Test 4: Illegal address write test PASSED.");
-		sbcs = set_field(sbcs_orig, DMI_SBCS_SBERROR, 1);
+		sbcs = set_field(sbcs_orig, DMI_SBCS_SBERROR, 2);
 		dmi_write(target, DMI_SBCS,sbcs);
+		dmi_read(target, &rd_val, DMI_SBCS);
+		if (get_field(rd_val, DMI_SBCS_SBERROR) == 0)
+			LOG_INFO("System Bus Access Test 4: Illegal address write test PASSED.");
+		else
+			LOG_ERROR("System Bus Access Test 4: Illegal address write test FAILED, unable to clear to 0.");
 	} else {
-		LOG_ERROR("System Bus Access Test 4: Illegal address write test FAILED.");
+		LOG_ERROR("System Bus Access Test 4: Illegal address write test FAILED, unable to set error code.");
 	}
 
 	/* Test 5: Write with unsupported sbaccess size */
@@ -3014,7 +3022,7 @@ static int riscv013_test_sba_config_reg(struct target *target,
 
 		dmi_read(target, &rd_val, DMI_SBCS);
 		if (get_field(rd_val, DMI_SBCS_SBERROR) == 4) {
-			sbcs = set_field(sbcs_orig, DMI_SBCS_SBERROR, 1);
+			sbcs = set_field(sbcs_orig, DMI_SBCS_SBERROR, 4);
 			dmi_write(target, DMI_SBCS, sbcs);
 			dmi_read(target, &rd_val, DMI_SBCS);
 			if (get_field(rd_val, DMI_SBCS_SBERROR) == 0)
@@ -3033,7 +3041,7 @@ static int riscv013_test_sba_config_reg(struct target *target,
 
 	dmi_read(target, &rd_val, DMI_SBCS);
 	if (get_field(rd_val, DMI_SBCS_SBERROR) == 3) {
-		sbcs = set_field(sbcs_orig, DMI_SBCS_SBERROR, 1);
+		sbcs = set_field(sbcs_orig, DMI_SBCS_SBERROR, 3);
 		dmi_write(target, DMI_SBCS, sbcs);
 		dmi_read(target, &rd_val, DMI_SBCS);
 		if (get_field(rd_val, DMI_SBCS_SBERROR) == 0)
