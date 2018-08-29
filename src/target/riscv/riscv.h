@@ -7,7 +7,7 @@ struct riscv_program;
 #include "opcodes.h"
 #include "gdb_regs.h"
 
-/* The register cache is staticly allocated. */
+/* The register cache is statically allocated. */
 #define RISCV_MAX_HARTS 32
 #define RISCV_MAX_REGISTERS 5000
 #define RISCV_MAX_TRIGGERS 32
@@ -31,8 +31,14 @@ enum riscv_halt_reason {
 	RISCV_HALT_BREAKPOINT,
 	RISCV_HALT_SINGLESTEP,
 	RISCV_HALT_TRIGGER,
-	RISCV_HALT_UNKNOWN
+	RISCV_HALT_UNKNOWN,
+	RISCV_HALT_ERROR
 };
+
+typedef struct {
+	struct target *target;
+	unsigned custom_number;
+} riscv_reg_info_t;
 
 typedef struct {
 	unsigned dtm_version;
@@ -57,7 +63,9 @@ typedef struct {
 	uint64_t saved_registers[RISCV_MAX_HARTS][RISCV_MAX_REGISTERS];
 	bool valid_saved_registers[RISCV_MAX_HARTS][RISCV_MAX_REGISTERS];
 
-	/* The register cache points into here. */
+	/* OpenOCD's register cache points into here. This is not per-hart because
+	 * we just invalidate the entire cache when we change which hart is
+	 * selected. */
 	uint64_t reg_cache_values[RISCV_MAX_REGISTERS];
 
 	/* Single buffer that contains all register names, instead of calling
@@ -86,13 +94,15 @@ typedef struct {
 	/* This hart contains an implicit ebreak at the end of the program buffer. */
 	bool impebreak;
 
+	bool triggers_enumerated;
+
 	/* Helper functions that target the various RISC-V debug spec
 	 * implementations. */
 	int (*get_register)(struct target *target,
 		riscv_reg_t *value, int hid, int rid);
 	int (*set_register)(struct target *, int hartid, int regid,
 			uint64_t value);
-	void (*select_current_hart)(struct target *);
+	int (*select_current_hart)(struct target *);
 	bool (*is_halted)(struct target *target);
 	int (*halt_current_hart)(struct target *);
 	int (*resume_current_hart)(struct target *target);
@@ -126,9 +136,6 @@ extern int riscv_command_timeout_sec;
 
 /* Wall-clock timeout after reset. Settable via RISC-V Target commands.*/
 extern int riscv_reset_timeout_sec;
-
-extern bool riscv_use_scratch_ram;
-extern uint64_t riscv_scratch_ram_address;
 
 extern bool riscv_prefer_sba;
 
@@ -198,7 +205,7 @@ bool riscv_rtos_enabled(const struct target *target);
 
 /* Sets the current hart, which is the hart that will actually be used when
  * issuing debug commands. */
-void riscv_set_current_hartid(struct target *target, int hartid);
+int riscv_set_current_hartid(struct target *target, int hartid);
 int riscv_current_hartid(const struct target *target);
 
 /*** Support functions for the RISC-V 'RTOS', which provides multihart support
@@ -257,7 +264,11 @@ int riscv_remove_breakpoint(struct target *target,
 int riscv_add_watchpoint(struct target *target, struct watchpoint *watchpoint);
 int riscv_remove_watchpoint(struct target *target,
 		struct watchpoint *watchpoint);
+int riscv_hit_watchpoint(struct target *target, struct watchpoint **hit_wp_address);
 
 int riscv_init_registers(struct target *target);
+
+void riscv_semihosting_init(struct target *target);
+int riscv_semihosting(struct target *target, int *retval);
 
 #endif

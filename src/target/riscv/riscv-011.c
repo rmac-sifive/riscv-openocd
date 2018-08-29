@@ -240,6 +240,7 @@ static unsigned int slot_offset(const struct target *target, slot_t slot)
 				case SLOT1: return 5;
 				case SLOT_LAST: return info->dramsize-1;
 			}
+			break;
 		case 64:
 			switch (slot) {
 				case SLOT0: return 4;
@@ -455,12 +456,12 @@ static uint64_t dbus_read(struct target *target, uint16_t address)
 	uint64_t value;
 	dbus_status_t status;
 	uint16_t address_in;
-	
+
 	/* If the previous read/write was to the same address, we will get the read data
 	 * from the previous access.
 	 * While somewhat nonintuitive, this is an efficient way to get the data.
 	 */
-	
+
 	unsigned i = 0;
 	do {
 		status = dbus_scan(target, &address_in, &value, DBUS_OP_READ, address, 0);
@@ -680,7 +681,7 @@ static bits_t read_bits(struct target *target)
 				}
 				increase_dbus_busy_delay(target);
 			} else if (status == DBUS_STATUS_FAILED) {
-				// TODO: return an actual error
+				/* TODO: return an actual error */
 				return err_result;
 			}
 		} while (status == DBUS_STATUS_BUSY && i++ < 256);
@@ -1407,12 +1408,6 @@ static int strict_step(struct target *target, bool announce)
 
 	LOG_DEBUG("enter");
 
-	struct breakpoint *breakpoint = target->breakpoints;
-	while (breakpoint) {
-		riscv_remove_breakpoint(target, breakpoint);
-		breakpoint = breakpoint->next;
-	}
-
 	struct watchpoint *watchpoint = target->watchpoints;
 	while (watchpoint) {
 		riscv_remove_watchpoint(target, watchpoint);
@@ -1422,12 +1417,6 @@ static int strict_step(struct target *target, bool announce)
 	int result = full_step(target, announce);
 	if (result != ERROR_OK)
 		return result;
-
-	breakpoint = target->breakpoints;
-	while (breakpoint) {
-		riscv_add_breakpoint(target, breakpoint);
-		breakpoint = breakpoint->next;
-	}
 
 	watchpoint = target->watchpoints;
 	while (watchpoint) {
@@ -1787,6 +1776,8 @@ static riscv_error_t handle_halt_routine(struct target *target)
 					break;
 				default:
 					assert(0);
+					LOG_ERROR("Got invalid register result %d", result);
+					goto error;
 			}
 			if (riscv_xlen(target) == 32) {
 				reg_cache_set(target, reg, data & 0xffffffff);
@@ -1847,7 +1838,7 @@ static int handle_halt(struct target *target, bool announce)
 			target->debug_reason = DBG_REASON_BREAKPOINT;
 			break;
 		case DCSR_CAUSE_HWBP:
-			target->debug_reason = DBG_REASON_WPTANDBKPT;
+			target->debug_reason = DBG_REASON_WATCHPOINT;
 			/* If we halted because of a data trigger, gdb doesn't know to do
 			 * the disable-breakpoints-step-enable-breakpoints dance. */
 			info->need_strict_step = true;
@@ -1871,6 +1862,12 @@ static int handle_halt(struct target *target, bool announce)
 		if (result != ERROR_OK)
 			return result;
 		riscv_enumerate_triggers(target);
+	}
+
+	if (target->debug_reason == DBG_REASON_BREAKPOINT) {
+		int retval;
+		if (riscv_semihosting(target, &retval) != 0)
+			return retval;
 	}
 
 	if (announce)
